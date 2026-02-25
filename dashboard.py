@@ -72,6 +72,25 @@ if "last_run_returncode" not in st.session_state:
     st.session_state.last_run_returncode = None
 if "last_run_page" not in st.session_state:
     st.session_state.last_run_page = ""
+if "running_process" not in st.session_state:
+    st.session_state.running_process = None
+if "current_page" not in st.session_state:
+    st.session_state.current_page = ""
+
+
+def _kill_running_process():
+    """Kill any running subprocess (stop button / page change)."""
+    proc = st.session_state.get("running_process")
+    if proc is not None and proc.poll() is None:
+        try:
+            proc.terminate()
+            proc.wait(timeout=3)
+        except Exception:
+            try:
+                proc.kill()
+            except Exception:
+                pass
+    st.session_state.running_process = None
 
 # --------------------------------------------------------------------------- #
 #  Streaming subprocess helper
@@ -450,6 +469,11 @@ page = st.sidebar.radio(
 st.sidebar.markdown("---")
 st.sidebar.caption(f"Project: {PROJECT_ROOT.name}")
 st.sidebar.caption(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+
+# Kill any running subprocess when the user switches pages
+if st.session_state.current_page and st.session_state.current_page != page:
+    _kill_running_process()
+st.session_state.current_page = page
 
 
 # =========================================================================== #
@@ -1131,10 +1155,17 @@ elif page == "🔗 Full Pipeline (P3)":
         c2.metric("Size", ov_size)
         c3.metric("Modified", ov_modified)
 
-        # Video player
-        st.video(str(ov_path))
+        # Video player — read as bytes to avoid moov-atom issues with
+        # OpenCV mp4v encoded files.
+        try:
+            st.video(ov_path.read_bytes(), format="video/mp4")
+        except Exception:
+            st.warning(
+                "Cannot play video in browser (moov atom issue). "
+                "Use the frame-by-frame viewer below instead."
+            )
 
-        # Frame-by-frame viewer
+        # Frame-by-frame viewer (always works via OpenCV)
         try:
             import cv2
             cap_ov = cv2.VideoCapture(str(ov_path))
@@ -1148,7 +1179,7 @@ elif page == "🔗 Full Pipeline (P3)":
                         st.image(
                             cv2.cvtColor(frame_ov, cv2.COLOR_BGR2RGB),
                             caption=f"Frame {fr}",
-                            use_container_width=True,
+                            width="stretch",
                         )
             cap_ov.release()
         except ImportError:
@@ -1566,7 +1597,7 @@ elif page == "🎬 Videos":
                         st.image(
                             frame_rgb,
                             caption=f"Frame {frame_num}",
-                            use_container_width=True,
+                            width="stretch",
                         )
                     cap.release()
                 else:

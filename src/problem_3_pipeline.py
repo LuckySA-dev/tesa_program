@@ -370,8 +370,12 @@ class Problem3Pipeline:
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        # Try H.264 first (browser-playable), fallback to mp4v
+        fourcc = cv2.VideoWriter_fourcc(*'avc1')
         out = cv2.VideoWriter(str(output_path), fourcc, fps, (width, height))
+        if not out.isOpened():
+            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+            out = cv2.VideoWriter(str(output_path), fourcc, fps, (width, height))
         
         # Move to start frame
         if start_frame > 0:

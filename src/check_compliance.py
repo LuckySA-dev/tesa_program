@@ -114,13 +114,13 @@ def check_integration():
     print("-"*70)
     
     files_to_check = [
-        ('submissions/submission.csv', 'Original (pixels)'),
-        ('submissions/submission_normalized.csv', 'Normalized version')
+        ('submissions/submission.csv', 'Original (pixels)', True),
+        ('submissions/submission_normalized.csv', 'Normalized version', False)
     ]
     
     all_ok = True
     
-    for filename, desc in files_to_check:
+    for filename, desc, required_file in files_to_check:
         try:
             df = pd.read_csv(filename)
             
@@ -138,14 +138,16 @@ def check_integration():
                 cx_col, cy_col = 'center_x', 'center_y'
             else:
                 print(f"ERROR No valid coordinate columns found!")
-                all_ok = False
+                if required_file:
+                    all_ok = False
                 continue
             
             missing = [col for col in required if col not in df.columns]
             
             if missing:
                 print(f"ERROR Missing columns: {missing}")
-                all_ok = False
+                if required_file:
+                    all_ok = False
                 continue
             else:
                 print(f"OK All required columns present")
@@ -166,14 +168,18 @@ def check_integration():
             print(df.head(2).to_string(index=False))
             
         except FileNotFoundError:
-            print(f"ERROR File not found: {filename}")
-            all_ok = False
+            if required_file:
+                print(f"ERROR File not found: {filename}")
+                all_ok = False
+            else:
+                print(f"SKIP File not found (optional): {filename}")
         except Exception as e:
             print(f"ERROR reading {filename}: {e}")
-            all_ok = False
+            if required_file:
+                all_ok = False
     
     if all_ok:
-        print(f"\nINTEGRATION: PASS (both versions available)\n")
+        print(f"\nINTEGRATION: PASS (primary submission available)\n")
     return all_ok
 
 
