@@ -1,0 +1,83 @@
+# =============================================================================
+# Docker Ignore – TESA Defence AI
+# =============================================================================
+
+# Version control
+.git
+.gitignore
+
+# Python caches
+__pycache__
+*.pyc
+*.pyo
+*.egg-info
+.eggs
+
+# Virtual environments
+.venv
+venv
+env
+.conda
+
+# IDE / Editor
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS files
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# Docker files (don't copy into image)
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Documentation (not needed at runtime)
+*.md
+!README.md
+reports/
+old/
+
+# Large training run outputs (keep only production model v21)
+runs/detect/drone_detect_v1/
+runs/detect/drone_detect_v2/
+runs/detect/drone_detect_v2_medium/
+runs/detect/drone_detect_v2_tuned/
+runs/detect/drone_detect_v3_augmented/
+runs/detect/drone_detect_v4_maxaug/
+runs/detect/drone_detect_v14/
+runs/detect/drone_detect_v15/
+runs/detect/drone_detect_v16_augmented/
+runs/detect/drone_detect_v20_more_data/
+runs/detect/drone_detect_v20_real_labels/
+runs/detect/drone_detect_v12/
+runs/detect/drone_detect_v13/
+runs/detect/val*/
+
+# Training datasets (not needed at inference time)
+datasets/
+yolo_dataset/
+yolo_dataset_augmented/
+
+# Videos (should be mounted at runtime, not baked in)
+videos/
+
+# Stacking models (not used in production)
+models/models_stacking/
+
+# Temporary / build outputs
+outputs/
+*.log
+*.tmp
+
+# Environment files (mounted at runtime, not baked in)
+.env
+.env.local
+
+# Notebooks
+notebooks/
+*.ipynb

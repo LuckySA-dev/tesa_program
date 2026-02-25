@@ -1,0 +1,24 @@
+# BoT-SORT configuration for stable tracking
+# Optimized for 2 identical drones
+
+# Tracker type
+tracker_type: botsort       # botsort or bytetrack
+
+# Tracking thresholds
+track_high_thresh: 0.4      # High confidence threshold
+track_low_thresh: 0.1       # Low confidence threshold (keep low to not lose drones)
+new_track_thresh: 0.5       # Threshold for creating new tracks (higher = more strict)
+track_buffer: 60            # Frames to keep lost tracks (2.4s at 25fps)
+match_thresh: 0.7           # IOU threshold for matching (lower = easier to match)
+
+# Motion compensation
+cmc_method: sparseOptFlow   # Camera motion compensation method
+fuse_score: True            # Fuse detection and Re-ID scores
+
+# ReID feature
+with_reid: True             # Use Re-ID for better tracking of identical objects
+fast_reid_config: ""        # Leave empty to use default
+fast_reid_weights: ""       # Leave empty to use default
+
+# Kalman filter
+kalman_format: xywh         # Format for Kalman filter

@@ -1,0 +1,51 @@
+# Dependencies สำหรับ TESA Drone Detection Competition
+# ติดตั้งด้วย: pip install -r requirements.txt
+
+# Core ML libraries
+ultralytics>=8.0.0          # YOLO v8+ with OBB support
+torch>=2.0.0                # PyTorch
+torchvision>=0.15.0         # PyTorch vision
+
+# Computer Vision
+opencv-python>=4.8.0        # OpenCV
+opencv-contrib-python>=4.8.0  # OpenCV extra modules
+
+# Data processing
+numpy>=1.24.0               # NumPy
+pandas>=2.0.0               # Pandas for CSV
+scipy>=1.10.0               # Scientific computing
+
+# Optional: Better OBB IoU calculation
+shapely>=2.0.0              # Polygon operations (optional)
+
+# Visualization
+matplotlib>=3.7.0           # Plotting
+seaborn>=0.12.0            # Statistical visualization
+pillow>=10.0.0             # Image processing
+
+# Progress bars
+tqdm>=4.65.0               # Progress bars
+
+# Tracking
+supervision>=0.18.0        # Supervision (ByteTrack wrapper)
+lap>=0.5.12                # Linear assignment (ultralytics tracker)
+
+# Machine Learning (Regression)
+xgboost>=1.7.0             # XGBoost regression models
+scikit-learn>=1.2.0        # ML utilities
+
+# Dashboard & CLI
+streamlit>=1.28.0          # Web dashboard
+plotly>=5.15.0             # Interactive charts
+requests>=2.31.0           # HTTP client (API testing)
+python-dotenv>=1.0.0       # .env file support
+
+# API protocols (optional – install as needed)
+paho-mqtt>=2.0.0           # MQTT protocol support
+websocket-client>=1.6.0    # WebSocket protocol support
+# grpcio>=1.60.0           # gRPC protocol support (uncomment if needed)
+# grpcio-tools>=1.60.0     # gRPC code generation
+
+# Optional: GPU support
+# nvidia-cudnn-cu11>=8.9.0  # Uncomment if using CUDA 11
+# nvidia-cudnn-cu12>=8.9.0  # Uncomment if using CUDA 12

@@ -1,0 +1,25 @@
+# BoT-SORT tracker configuration - Minimal changes for stability
+# Only increase track_buffer to keep tracks longer
+
+# Tracker type
+tracker_type: botsort
+
+# Track matching thresholds (default values)
+track_high_thresh: 0.5     
+track_low_thresh: 0.1      
+new_track_thresh: 0.6      
+track_buffer: 180          # INCREASED: Keep lost tracks for 180 frames (~7.2s) 
+match_thresh: 0.8          
+fuse_score: true           
+
+# ReID module
+with_reid: false
+proximity_thresh: 0.5
+appearance_thresh: 0.25
+
+# GMC (Global Motion Compensation)
+gmc_method: sparseOptFlow
+
+# Other parameters
+min_box_area: 10
+aspect_ratio_thresh: 100

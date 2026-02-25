@@ -1,0 +1,16 @@
+# Augmented YOLO dataset configuration
+# Original labels + Pseudo labels from YOLO predictions
+
+path: C:\Users\title\OneDrive\เดสก์ท็อป\tesa_problem_2\yolo_dataset_augmented
+train: train/images
+val: valid/images
+
+# Classes
+names:
+  0: drone
+
+# Dataset statistics
+# Original training images: 50
+# Pseudo-labeled images: 318
+# Total training images: 368
+# Validation images: 42

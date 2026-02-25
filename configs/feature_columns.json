@@ -1,0 +1,37 @@
+{
+  "feature_columns": [
+    "yolo_cx",
+    "yolo_cy",
+    "yolo_w",
+    "yolo_h",
+    "yolo_conf",
+    "yolo_area",
+    "yolo_aspect_ratio",
+    "yolo_dist_from_center",
+    "yolo_angle_from_center",
+    "yolo_in_center",
+    "distance_m",
+    "bearing_deg",
+    "bearing_sin",
+    "bearing_cos",
+    "distance_x_conf",
+    "distance_x_area",
+    "bearing_x_cx",
+    "bearing_x_cy",
+    "altitude_x_distance",
+    "conf_squared",
+    "conf_sqrt",
+    "is_high_conf",
+    "is_detected",
+    "estimated_lat_offset",
+    "estimated_lon_offset",
+    "distance_bin",
+    "altitude_bin",
+    "image_num_normalized"
+  ],
+  "target_columns": [
+    "latitude_deg",
+    "longitude_deg",
+    "altitude_m"
+  ]
+}

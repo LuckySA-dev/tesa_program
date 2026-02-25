@@ -1,0 +1,29 @@
+{
+  "feature_columns": [
+    "has_detection",
+    "confidence",
+    "bbox_x",
+    "bbox_y",
+    "bbox_w",
+    "bbox_h",
+    "bbox_area",
+    "bbox_aspect_ratio",
+    "bbox_center_distance",
+    "offset_x",
+    "offset_y",
+    "distance_m",
+    "sin_bearing",
+    "cos_bearing",
+    "altitude_log",
+    "altitude_sqrt",
+    "distance_x_conf",
+    "distance_x_area",
+    "altitude_x_conf",
+    "bearing_x_offset_x",
+    "bearing_x_offset_y",
+    "area_per_distance",
+    "conf_x_area",
+    "pixel_angle_sin",
+    "pixel_angle_cos"
+  ]
+}

@@ -1,0 +1,12 @@
+# YOLOv8-OBB Dataset Configuration for Drone Detection
+# Dataset: 92 images (50 train, 42 valid)
+# Task: Oriented Bounding Box Detection
+
+# Paths (relative to project root)
+path: yolo_dataset  # Dataset root directory
+train: train/images  # Train images (relative to 'path')
+val: valid/images    # Validation images (relative to 'path')
+
+# Classes
+nc: 1  # Number of classes
+names: ['drone']  # Class names (0: drone)

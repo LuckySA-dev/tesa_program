@@ -1,0 +1,122 @@
+# =============================================================================
+# TESA Defence AI — .gitignore  (v1)
+# =============================================================================
+
+# ----------------------------- Python ----------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# ----------------------------- Virtual envs ----------------------------------
+.venv/
+venv/
+env/
+ENV/
+.conda/
+
+# ----------------------------- IDE / Editor ----------------------------------
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# ----------------------------- OS junk ---------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
+ehthumbs.db
+
+# ----------------------------- Jupyter ---------------------------------------
+.ipynb_checkpoints/
+*.ipynb
+
+# ----------------------------- Environment -----------------------------------
+.env
+.env.local
+.env.*.local
+
+# ----------------------------- Large binary / model files --------------------
+# All model weights are tracked via Git LFS (.gitattributes).
+# If you do NOT use LFS, uncomment the lines below to skip them entirely:
+# *.pt
+# *.pth
+# *.pkl
+# *.h5
+# *.hdf5
+# *.onnx
+
+# Non-production YOLO runs (keep only v21 production model)
+runs/detect/drone_detect_v1/
+runs/detect/drone_detect_v2/
+runs/detect/drone_detect_v2_medium/
+runs/detect/drone_detect_v2_tuned/
+runs/detect/drone_detect_v3_augmented/
+runs/detect/drone_detect_v4_maxaug/
+runs/detect/drone_detect_v12/
+runs/detect/drone_detect_v13/
+runs/detect/drone_detect_v14/
+runs/detect/drone_detect_v15/
+runs/detect/drone_detect_v16_augmented/
+runs/detect/drone_detect_v20_more_data/
+runs/detect/drone_detect_v20_real_labels/
+runs/detect/val*/
+
+# Duplicate / unused model checkpoints
+models/yolov8s.pt
+models/yolo11n.pt
+models/yolov8m-obb.pt
+models/yolov8n.pt
+
+# Stacking models (experimental, not used in production)
+models/models_stacking/
+
+# ----------------------------- Data & media (large) --------------------------
+# Training datasets (too large for git — download separately)
+datasets/
+yolo_dataset/
+yolo_dataset_augmented/
+
+# Videos (mounted at runtime, too large for git)
+videos/
+
+# Processed CSV caches
+data/*.csv
+!data/gcp_samples.csv
+
+# ----------------------------- Outputs (generated) ---------------------------
+outputs/
+submissions/*.csv
+!submissions/.gitkeep
+
+# ----------------------------- Archives --------------------------------------
+*.zip
+*.tar.gz
+*.rar
+*.7z
+
+# ----------------------------- Misc ------------------------------------------
+wandb/
+*.tmp
+*.bak
+*.log
+
+# Keep directory structure
+!.gitkeep
