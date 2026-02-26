@@ -43,6 +43,7 @@ from tracker import ByteTracker
 from localizer import ApproximationLocalizer
 from visualizer import DroneVisualizer
 from hw import get_device, sprint
+from utils import VideoWriterSafe
 
 
 # ============================================================================
@@ -370,12 +371,8 @@ class Problem3Pipeline:
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         
-        # Try H.264 first (browser-playable), fallback to mp4v
-        fourcc = cv2.VideoWriter_fourcc(*'avc1')
-        out = cv2.VideoWriter(str(output_path), fourcc, fps, (width, height))
-        if not out.isOpened():
-            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-            out = cv2.VideoWriter(str(output_path), fourcc, fps, (width, height))
+        # Use safe writer: AVI -> ffmpeg H.264+faststart MP4
+        out = VideoWriterSafe(output_path, fps, (width, height))
         
         # Move to start frame
         if start_frame > 0:

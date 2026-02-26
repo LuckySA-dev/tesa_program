@@ -98,8 +98,8 @@ class DroneDetectionTracker:
         # Video writer
         writer = None
         if save_video:
-            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-            writer = cv2.VideoWriter(save_video, fourcc, fps, (width, height))
+            from utils import VideoWriterSafe
+            writer = VideoWriterSafe(save_video, fps, (width, height))
             sprint(f"Saving video to: {save_video}")
         
         # Processing

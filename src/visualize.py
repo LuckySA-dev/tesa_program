@@ -173,8 +173,8 @@ def visualize_tracking_video(video_path: str,
     
     writer = None
     if output_path:
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        writer = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+        from utils import VideoWriterSafe
+        writer = VideoWriterSafe(output_path, fps, (width, height))
     
     # สร้างสีแต่ละ track
     track_ids = df['track_id'].unique()

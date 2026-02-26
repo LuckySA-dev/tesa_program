@@ -8,9 +8,94 @@ Helper functions สำหรับทุก problems
 import cv2
 import numpy as np
 import pandas as pd
+import shutil
+import subprocess
 from pathlib import Path
 from typing import List, Dict, Tuple
 from hw import sprint
+
+
+# --------------------------------------------------------------------------- #
+#  Safe Video Writer — always produces browser-playable MP4
+# --------------------------------------------------------------------------- #
+
+class VideoWriterSafe:
+    """Wraps cv2.VideoWriter: writes to temp AVI, then converts to MP4
+    with ``ffmpeg -movflags +faststart`` on release for browser playback.
+
+    Falls back to plain OpenCV mp4v if ffmpeg is unavailable.
+
+    Usage (drop-in replacement)::
+
+        out = VideoWriterSafe(output_path, fps, (width, height))
+        out.write(frame)
+        out.release()          # triggers AVI -> MP4 conversion
+    """
+
+    def __init__(self, output_path: str | Path, fps: float,
+                 frame_size: tuple[int, int]):
+        self.output_path = Path(output_path)
+        self.output_path.parent.mkdir(parents=True, exist_ok=True)
+        self._has_ffmpeg = shutil.which("ffmpeg") is not None
+
+        if self._has_ffmpeg:
+            # Write to temp AVI (XVID — always writes headers correctly)
+            self._tmp = self.output_path.with_suffix(".._tmp.avi")
+            fourcc = cv2.VideoWriter_fourcc(*"XVID")
+            self._writer = cv2.VideoWriter(
+                str(self._tmp), fourcc, fps, frame_size
+            )
+        else:
+            # No ffmpeg — write mp4v directly (may be unplayable in browser)
+            self._tmp = None
+            fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+            self._writer = cv2.VideoWriter(
+                str(self.output_path), fourcc, fps, frame_size
+            )
+
+    # Delegate common cv2.VideoWriter methods --------------------------------
+    def write(self, frame: np.ndarray) -> None:
+        self._writer.write(frame)
+
+    def isOpened(self) -> bool:  # noqa: N802
+        return self._writer.isOpened()
+
+    def release(self) -> None:
+        """Release the underlying writer and convert AVI -> MP4 if needed."""
+        self._writer.release()
+        if self._tmp is not None and self._tmp.exists():
+            self._avi_to_mp4()
+
+    # Internal ---------------------------------------------------------------
+    def _avi_to_mp4(self) -> None:
+        """Convert temp AVI to MP4 (H.264 + faststart)."""
+        try:
+            result = subprocess.run(
+                [
+                    "ffmpeg", "-y",
+                    "-i", str(self._tmp),
+                    "-c:v", "libx264",
+                    "-preset", "fast",
+                    "-crf", "23",
+                    "-movflags", "+faststart",
+                    "-an",                       # no audio
+                    str(self.output_path),
+                ],
+                capture_output=True,
+                timeout=600,
+            )
+            if result.returncode == 0 and self.output_path.exists():
+                self._tmp.unlink(missing_ok=True)
+                sprint(f"Video saved (H.264 + faststart): {self.output_path}")
+            else:
+                # Conversion failed — keep the AVI as fallback
+                self._tmp.rename(self.output_path.with_suffix(".avi"))
+                sprint(f"ffmpeg conversion failed; AVI kept: "
+                       f"{self.output_path.with_suffix('.avi')}")
+        except Exception as exc:
+            sprint(f"ffmpeg conversion error: {exc}")
+            if self._tmp.exists():
+                self._tmp.rename(self.output_path.with_suffix(".avi"))
 
 
 def obb_to_corners(center_x: float, center_y: float, 

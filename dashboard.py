@@ -117,24 +117,46 @@ def _safe_upload(uploaded_file, target_dir: Path) -> Path:
 
 
 def _fix_video_for_browser(video_path: Path) -> Path:
-    """Run ffmpeg -movflags +faststart so the browser can play mp4v videos."""
+    """Re-encode video to H.264 + faststart so browsers can play it.
+
+    Tries ``-c copy`` first (fast, no quality loss).  If the source file has
+    no valid moov atom (common with OpenCV mp4v), falls back to full
+    re-encode with libx264.
+    """
     import shutil
     if shutil.which("ffmpeg") is None:
         return video_path
-    fixed = video_path.parent / f".web_{video_path.name}"
-    # Skip if already fixed and up-to-date
+
+    fixed = video_path.parent / f".web_{video_path.stem}.mp4"
+    # Skip if already converted and still newer than source
     if fixed.exists() and fixed.stat().st_mtime >= video_path.stat().st_mtime:
         return fixed
+
+    # Attempt 1 — stream-copy (fast)
     try:
-        subprocess.run(
+        r = subprocess.run(
             ["ffmpeg", "-y", "-i", str(video_path),
              "-c", "copy", "-movflags", "+faststart", str(fixed)],
             capture_output=True, timeout=120,
         )
-        if fixed.exists() and fixed.stat().st_size > 0:
+        if r.returncode == 0 and fixed.exists() and fixed.stat().st_size > 0:
             return fixed
     except Exception:
         pass
+
+    # Attempt 2 — full re-encode (handles broken moov / raw codecs)
+    try:
+        r = subprocess.run(
+            ["ffmpeg", "-y", "-i", str(video_path),
+             "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+             "-movflags", "+faststart", "-an", str(fixed)],
+            capture_output=True, timeout=600,
+        )
+        if r.returncode == 0 and fixed.exists() and fixed.stat().st_size > 0:
+            return fixed
+    except Exception:
+        pass
+
     return video_path
 
 # --------------------------------------------------------------------------- #
@@ -1186,6 +1208,11 @@ elif page == "🔗 Full Pipeline (P3)":
         if d.exists():
             for ext in ("*.mp4", "*.avi", "*.mov"):
                 overlay_videos.extend(d.glob(ext))
+    # Filter out temp / cache files
+    overlay_videos = [
+        v for v in overlay_videos
+        if not v.name.startswith(".web_") and "_tmp." not in v.name
+    ]
     overlay_videos = sorted(overlay_videos, key=lambda p: p.stat().st_mtime, reverse=True)
 
     if overlay_videos:
