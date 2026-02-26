@@ -92,6 +92,51 @@ def _kill_running_process():
                 pass
     st.session_state.running_process = None
 
+
+def _is_pipeline_active() -> bool:
+    """Check if a subprocess is currently running."""
+    proc = st.session_state.get("running_process")
+    return proc is not None and proc.poll() is None
+
+
+def _safe_upload(uploaded_file, target_dir: Path) -> Path:
+    """Save uploaded file, falling back to /tmp when target is read-only."""
+    try:
+        ensure_dir(target_dir)
+        dest = target_dir / uploaded_file.name
+        dest.write_bytes(uploaded_file.getvalue())
+        return dest
+    except OSError:
+        import tempfile as _tf
+        tmp = Path(_tf.gettempdir()) / "tesa_uploads"
+        ensure_dir(tmp)
+        dest = tmp / uploaded_file.name
+        dest.write_bytes(uploaded_file.getvalue())
+        st.info(f"Directory read-only; saved to temp: {tmp}")
+        return dest
+
+
+def _fix_video_for_browser(video_path: Path) -> Path:
+    """Run ffmpeg -movflags +faststart so the browser can play mp4v videos."""
+    import shutil
+    if shutil.which("ffmpeg") is None:
+        return video_path
+    fixed = video_path.parent / f".web_{video_path.name}"
+    # Skip if already fixed and up-to-date
+    if fixed.exists() and fixed.stat().st_mtime >= video_path.stat().st_mtime:
+        return fixed
+    try:
+        subprocess.run(
+            ["ffmpeg", "-y", "-i", str(video_path),
+             "-c", "copy", "-movflags", "+faststart", str(fixed)],
+            capture_output=True, timeout=120,
+        )
+        if fixed.exists() and fixed.stat().st_size > 0:
+            return fixed
+    except Exception:
+        pass
+    return video_path
+
 # --------------------------------------------------------------------------- #
 #  Streaming subprocess helper
 # --------------------------------------------------------------------------- #
@@ -99,13 +144,11 @@ def _kill_running_process():
 def run_pipeline_streaming(cmd: list, label: str = "Running pipeline...") -> tuple:
     """
     Execute a subprocess with real-time streaming output in Streamlit.
-
-    Uses subprocess.Popen with PYTHONUNBUFFERED=1 to display output
-    line-by-line in a st.status container.
-
-    Returns:
-        (returncode, full_output_text)
+    Stores the process in session_state so it can be killed on Stop / page change.
+    Returns (returncode, full_output_text).
     """
+    _kill_running_process()  # kill any leftover
+
     env = os.environ.copy()
     env["PYTHONUNBUFFERED"] = "1"
     env["PYTHONIOENCODING"] = "utf-8"
@@ -129,61 +172,62 @@ def run_pipeline_streaming(cmd: list, label: str = "Running pipeline...") -> tup
                 env=env,
                 bufsize=1,
             )
+            st.session_state.running_process = process
 
             start_time = time.time()
 
             for line in iter(process.stdout.readline, ""):
+                if process.poll() is not None:
+                    break
                 stripped = line.rstrip()
                 if stripped:
                     output_lines.append(stripped)
-                    # Show last 30 lines – CSS caps height for compactness
                     display_text = "\n".join(output_lines[-30:])
                     log_area.code(display_text, language="text")
                     elapsed = time.time() - start_time
                     progress_text.caption(
-                        f"⏱️ Elapsed: {elapsed:.1f}s | Lines: {len(output_lines)}"
+                        f"Elapsed: {elapsed:.1f}s | Lines: {len(output_lines)}"
                     )
 
-            process.wait()
+            process.wait(timeout=10)
             elapsed = time.time() - start_time
+            st.session_state.running_process = None
 
             if process.returncode == 0:
                 status.update(
-                    label=f"✅ {label} — Completed in {elapsed:.1f}s",
+                    label=f"{label} -- Done ({elapsed:.1f}s)",
                     state="complete",
                     expanded=False,
                 )
             else:
                 status.update(
-                    label=f"❌ {label} — Failed (exit code {process.returncode})",
+                    label=f"{label} -- Failed (code {process.returncode})",
                     state="error",
                     expanded=True,
                 )
 
         except FileNotFoundError:
             output_lines.append("ERROR: Python executable not found!")
-            status.update(label=f"❌ {label} — Failed", state="error")
+            status.update(label=f"{label} -- Failed", state="error")
+            st.session_state.running_process = None
             return -1, "\n".join(output_lines)
         except Exception as e:
             output_lines.append(f"ERROR: {e}")
-            status.update(label=f"❌ {label} — Failed", state="error")
+            status.update(label=f"{label} -- Failed", state="error")
+            st.session_state.running_process = None
             return -1, "\n".join(output_lines)
 
     full_output = "\n".join(output_lines)
-
-    # Save to session state
     st.session_state.last_run_output = full_output
     st.session_state.last_run_returncode = process.returncode
-
     return process.returncode, full_output
 
 
 # --------------------------------------------------------------------------- #
-#  Cached helpers
+#  Helpers
 # --------------------------------------------------------------------------- #
-@st.cache_data
 def load_csv(path: str) -> pd.DataFrame:
-    """Load a CSV file with caching."""
+    """Load a CSV file."""
     return pd.read_csv(path)
 
 
@@ -275,24 +319,29 @@ def get_yolo_model_options() -> dict:
     return options
 
 
-@st.cache_data
 def list_videos() -> list:
     """Return list of video files (including temp uploads in Docker)."""
     vids = []
     vid_dirs = [PROJECT_ROOT / "videos"]
-    # Also check temp dir for Docker read-only uploads
     import tempfile
     tmp_vid = Path(tempfile.gettempdir()) / "tesa_videos"
     if tmp_vid.exists():
         vid_dirs.append(tmp_vid)
+    tmp_up = Path(tempfile.gettempdir()) / "tesa_uploads"
+    if tmp_up.exists():
+        vid_dirs.append(tmp_up)
     for vid_dir in vid_dirs:
         if vid_dir.exists():
             for ext in ("*.mp4", "*.avi", "*.mov", "*.mkv"):
                 vids += list(vid_dir.glob(ext))
-    return sorted(vids)
+    # Deduplicate by name (prefer primary dir)
+    seen = {}
+    for v in vids:
+        if v.name not in seen:
+            seen[v.name] = v
+    return sorted(seen.values(), key=lambda p: p.name)
 
 
-@st.cache_data
 def list_submissions() -> list:
     """Return submission CSV paths."""
     sub_dir = PROJECT_ROOT / "submissions"
@@ -589,8 +638,9 @@ elif page == "🎯 Detection (P1)":
         # Video selection
         videos = list_videos()
         video_names = [v.name for v in videos]
+        video_map = {v.name: v for v in videos}
         if video_names:
-            selected_video = st.selectbox("📹 Video File", video_names)
+            selected_video = st.selectbox("Video File", video_names)
         else:
             selected_video = None
             st.warning("No videos found in videos/ directory")
@@ -602,12 +652,9 @@ elif page == "🎯 Detection (P1)":
             key="p1_upload",
         )
         if uploaded_video is not None:
-            save_path = PROJECT_ROOT / "videos" / uploaded_video.name
-            ensure_dir(PROJECT_ROOT / "videos")
-            save_path.write_bytes(uploaded_video.getvalue())
+            _safe_upload(uploaded_video, PROJECT_ROOT / "videos")
             st.success(f"Uploaded: {uploaded_video.name}")
             selected_video = uploaded_video.name
-            list_videos.clear()  # Clear cache
 
         # Model selection
         model_options = get_yolo_model_options()
@@ -640,12 +687,14 @@ elif page == "🎯 Detection (P1)":
 
     st.markdown("---")
 
-    # --- Run Button ---
-    if st.button(
-        "▶️ Run Detection", type="primary", width="stretch", key="p1_run"
-    ):
+    # --- Run / Stop Button ---
+    if _is_pipeline_active():
+        if st.button("Stop Detection", type="secondary", width="stretch", key="p1_run"):
+            _kill_running_process()
+            st.rerun()
+    elif st.button("Run Detection", type="primary", width="stretch", key="p1_run"):
         if selected_video:
-            video_path = str(PROJECT_ROOT / "videos" / selected_video)
+            video_path = str(video_map.get(selected_video, PROJECT_ROOT / "videos" / selected_video))
             output_path = str(PROJECT_ROOT / "submissions" / output_name)
             ensure_dir(PROJECT_ROOT / "submissions")
 
@@ -674,11 +723,11 @@ elif page == "🎯 Detection (P1)":
             )
 
             if returncode == 0:
-                st.success("✅ Detection completed successfully!")
+                st.success("Detection completed successfully!")
                 st.session_state.last_run_page = "p1"
                 st.balloons()
             else:
-                st.error("❌ Detection failed. Check the output log above.")
+                st.error("Detection failed. Check the output log above.")
         else:
             st.warning("Please select or upload a video file.")
 
@@ -770,10 +819,8 @@ elif page == "📍 Localization (P2)":
                 "Upload Detection CSV", type=["csv"], key="p2_upload"
             )
             if uploaded_csv is not None:
-                save_path = PROJECT_ROOT / "submissions" / uploaded_csv.name
-                ensure_dir(PROJECT_ROOT / "submissions")
-                save_path.write_bytes(uploaded_csv.getvalue())
-                det_csv_path = str(save_path)
+                dest = _safe_upload(uploaded_csv, PROJECT_ROOT / "submissions")
+                det_csv_path = str(dest)
                 selected_det = uploaded_csv.name
                 st.success(f"Uploaded: {uploaded_csv.name}")
             else:
@@ -847,10 +894,12 @@ elif page == "📍 Localization (P2)":
 
     st.markdown("---")
 
-    # --- Run Button ---
-    if st.button(
-        "▶️ Run Localization", type="primary", width="stretch", key="p2_run"
-    ):
+    # --- Run / Stop Button ---
+    if _is_pipeline_active():
+        if st.button("Stop Localization", type="secondary", width="stretch", key="p2_run"):
+            _kill_running_process()
+            st.rerun()
+    elif st.button("Run Localization", type="primary", width="stretch", key="p2_run"):
         if det_csv_path and Path(det_csv_path).exists():
             output_path = str(PROJECT_ROOT / "submissions" / output_name_p2)
             ensure_dir(PROJECT_ROOT / "submissions")
@@ -870,7 +919,6 @@ elif page == "📍 Localization (P2)":
                 "--height",
                 str(frame_height),
             ]
-            # If using video for auto-detect, also pass --video
             if video_for_dims:
                 cmd.extend(["--video", video_for_dims])
 
@@ -879,11 +927,11 @@ elif page == "📍 Localization (P2)":
             )
 
             if returncode == 0:
-                st.success("✅ Localization completed successfully!")
+                st.success("Localization completed successfully!")
                 st.session_state.last_run_page = "p2"
                 st.balloons()
             else:
-                st.error("❌ Localization failed. Check the output log above.")
+                st.error("Localization failed. Check the output log above.")
         else:
             st.warning("Please select or upload a valid detection CSV file.")
 
@@ -989,12 +1037,11 @@ elif page == "🔗 Full Pipeline (P3)":
             else:
                 st.error(f"❌ Production video not found: videos/P3_VIDEO.mp4")
 
-        if st.button(
-            "▶️ Run Production Pipeline",
-            type="primary",
-            width="stretch",
-            key="p3_prod_run",
-        ):
+        if _is_pipeline_active():
+            if st.button("Stop Production Pipeline", type="secondary", width="stretch", key="p3_prod_run"):
+                _kill_running_process()
+                st.rerun()
+        elif st.button("Run Production Pipeline", type="primary", width="stretch", key="p3_prod_run"):
             if prod_model.exists() and prod_video.exists():
                 cmd = [
                     sys.executable,
@@ -1007,11 +1054,11 @@ elif page == "🔗 Full Pipeline (P3)":
                 )
 
                 if returncode == 0:
-                    st.success("✅ Production pipeline completed!")
+                    st.success("Production pipeline completed!")
                     st.session_state.last_run_page = "p3"
                     st.balloons()
                 else:
-                    st.error("❌ Pipeline failed. Check the output log above.")
+                    st.error("Pipeline failed. Check the output log above.")
             else:
                 st.error(
                     "Missing required files. Ensure both the model and video exist."
@@ -1073,15 +1120,14 @@ elif page == "🔗 Full Pipeline (P3)":
                     key="p3_vid_output",
                 )
 
-        if st.button(
-            "▶️ Run Integration Pipeline",
-            width="stretch",
-            key="p3_integ_run",
-        ):
+        if _is_pipeline_active():
+            if st.button("Stop Integration Pipeline", type="secondary", width="stretch", key="p3_integ_run"):
+                _kill_running_process()
+                st.rerun()
+        elif st.button("Run Integration Pipeline", type="primary", width="stretch", key="p3_integ_run"):
             if selected_video_p3:
-                video_path = str(
-                    PROJECT_ROOT / "videos" / selected_video_p3
-                )
+                video_map_p3 = {v.name: v for v in videos}
+                video_path = str(video_map_p3.get(selected_video_p3, PROJECT_ROOT / "videos" / selected_video_p3))
                 output_path = str(
                     PROJECT_ROOT / "submissions" / output_name_p3
                 )
@@ -1116,12 +1162,12 @@ elif page == "🔗 Full Pipeline (P3)":
                 )
 
                 if returncode == 0:
-                    st.success("✅ Integration pipeline completed!")
+                    st.success("Integration pipeline completed!")
                     st.session_state.last_run_page = "p3"
                     st.balloons()
                 else:
                     st.error(
-                        "❌ Pipeline failed. Check the output log above."
+                        "Pipeline failed. Check the output log above."
                     )
             else:
                 st.warning("Please select a video file.")
@@ -1155,13 +1201,13 @@ elif page == "🔗 Full Pipeline (P3)":
         c2.metric("Size", ov_size)
         c3.metric("Modified", ov_modified)
 
-        # Video player — read as bytes to avoid moov-atom issues with
-        # OpenCV mp4v encoded files.
+        # Video player — fix moov-atom for browser playback
         try:
-            st.video(ov_path.read_bytes(), format="video/mp4")
+            playable = _fix_video_for_browser(ov_path)
+            st.video(str(playable), format="video/mp4")
         except Exception:
             st.warning(
-                "Cannot play video in browser (moov atom issue). "
+                "Cannot play video in browser. "
                 "Use the frame-by-frame viewer below instead."
             )
 
@@ -1242,11 +1288,8 @@ elif page == "📊 Submissions":
             "Upload CSV file", type=["csv"], key="sub_upload"
         )
         if uploaded_sub is not None:
-            save_path = PROJECT_ROOT / "submissions" / uploaded_sub.name
-            ensure_dir(PROJECT_ROOT / "submissions")
-            save_path.write_bytes(uploaded_sub.getvalue())
+            saved = _safe_upload(uploaded_sub, PROJECT_ROOT / "submissions")
             st.success(f"Uploaded: {uploaded_sub.name}")
-            list_submissions.clear()
 
     submissions = list_submissions()
     if submissions:
@@ -1279,7 +1322,11 @@ elif page == "📊 Submissions":
 
     threshold = st.slider("Detection Threshold (pixels)", 5, 50, 20)
 
-    if st.button("🔍 Validate", width="stretch"):
+    if _is_pipeline_active():
+        if st.button("Stop Validation", type="secondary", width="stretch", key="val_run"):
+            _kill_running_process()
+            st.rerun()
+    elif st.button("Validate", type="primary", width="stretch", key="val_run"):
         if pred_file != "None" and gt_file != "None":
             cmd = [
                 sys.executable,
@@ -1296,9 +1343,9 @@ elif page == "📊 Submissions":
                 cmd, label="Running Validation..."
             )
             if returncode == 0:
-                st.success("✅ Validation completed!")
+                st.success("Validation completed!")
             else:
-                st.error("❌ Validation failed.")
+                st.error("Validation failed.")
         else:
             st.warning(
                 "Please select both prediction and ground truth files."
@@ -1326,9 +1373,11 @@ elif page == "✅ Compliance Check":
     """
     )
 
-    if st.button(
-        "▶️ Run Full Compliance Check", type="primary", width="stretch"
-    ):
+    if _is_pipeline_active():
+        if st.button("Stop Compliance Check", type="secondary", width="stretch", key="compliance_run"):
+            _kill_running_process()
+            st.rerun()
+    elif st.button("Run Full Compliance Check", type="primary", width="stretch", key="compliance_run"):
         cmd = [
             sys.executable,
             "-u",
@@ -1338,7 +1387,7 @@ elif page == "✅ Compliance Check":
             cmd, label="Checking Compliance..."
         )
         if returncode == 0:
-            st.success("✅ Compliance check completed!")
+            st.success("Compliance check completed!")
         else:
             st.warning("Compliance check finished with issues. See log above.")
 
@@ -1530,28 +1579,16 @@ elif page == "🎬 Videos":
             key="vid_upload",
         )
         if uploaded_vid is not None:
-            # Try primary dir first; fall back to /tmp (Docker read-only mount)
-            save_dir = PROJECT_ROOT / "videos"
-            try:
-                ensure_dir(save_dir)
-                save_path = save_dir / uploaded_vid.name
-                save_path.write_bytes(uploaded_vid.getvalue())
-            except OSError:
-                import tempfile
-                save_dir = Path(tempfile.gettempdir()) / "tesa_videos"
-                ensure_dir(save_dir)
-                save_path = save_dir / uploaded_vid.name
-                save_path.write_bytes(uploaded_vid.getvalue())
-                st.info(f"videos/ is read-only; saved to temp: {save_dir}")
+            _safe_upload(uploaded_vid, PROJECT_ROOT / "videos")
             st.success(f"Uploaded: {uploaded_vid.name}")
-            list_videos.clear()
 
     videos = list_videos()
+    video_map_vids = {v.name: v for v in videos}
     if videos:
         selected_vid = st.selectbox(
             "Select Video", [v.name for v in videos]
         )
-        vid_path = PROJECT_ROOT / "videos" / selected_vid
+        vid_path = video_map_vids.get(selected_vid, PROJECT_ROOT / "videos" / selected_vid)
 
         if vid_path.exists():
             size = format_file_size(vid_path.stat().st_size)
@@ -1608,7 +1645,11 @@ elif page == "🎬 Videos":
             # Streamlit video player
             st.markdown("---")
             st.subheader("Video Player")
-            st.video(str(vid_path))
+            try:
+                playable = _fix_video_for_browser(vid_path)
+                st.video(str(playable))
+            except Exception:
+                st.video(str(vid_path))
     else:
         st.info("No video files found in videos/ directory.")
 
